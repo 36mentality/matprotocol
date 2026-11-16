@@ -1,6 +1,6 @@
 {
-  "name": "Mätprotokoll",
-  "short_name": "Mätprotokoll",
+  "name": "Measurement Log",
+  "short_name": "Measurement Log",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
