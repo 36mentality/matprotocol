@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b5cad">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Measurement Log">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Measurement Log</title>
+<style>
+*{box-sizing:border-box}
+:root{--blue:#0b5cad;--bg:#f2f4f7;--card:#fff;--line:#d9dee5;--txt:#1b2430;--mut:#667085;--red:#c62828;--green:#2e7d32}
+html,body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;-webkit-text-size-adjust:100%}
+header.top{position:sticky;top:0;z-index:10;background:var(--blue);color:#fff;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;display:flex;align-items:center;gap:10px}
+header.top h1{font-size:18px;margin:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+header.top button{background:rgba(255,255,255,.18);color:#fff;border:0;border-radius:8px;padding:8px 12px;font-size:15px}
+main{padding:12px 12px 110px;max-width:760px;margin:0 auto}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+.card h2{font-size:15px;margin:0 0 8px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
+.hdr{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}.hdr h2{margin:0}
+label{display:block;font-size:13px;color:var(--mut);margin:8px 0 3px}
+input,select,textarea{width:100%;font-size:16px;padding:10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--txt);font-family:inherit}
+textarea{min-height:70px;resize:vertical}
+.row{display:flex;gap:8px}.row>*{flex:1;min-width:0}
+button.btn{font-size:16px;padding:12px 14px;border-radius:10px;border:1px solid var(--blue);background:var(--blue);color:#fff;font-weight:600}
+button.btn:disabled{opacity:.45}
+button.btn.sm{font-size:14px;padding:8px 12px;border-radius:8px}
+button.btn.sec{background:#fff;color:var(--blue)}
+button.btn.danger{background:#fff;color:var(--red);border-color:var(--red)}
+button.btn.block{width:100%;margin-top:8px}
+.item{display:block;width:100%;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px;color:inherit;font:inherit}
+.item .t{font-weight:600}.item .s{font-size:13px;color:var(--mut);margin-top:3px}
+.chip{display:inline-block;font-size:12px;font-weight:600;border-radius:99px;padding:2px 8px;margin-right:4px;background:#e8eef6;color:var(--blue)}
+.chip.red{background:#fdeaea;color:var(--red)}.chip.green{background:#e6f4e7;color:var(--green)}
+.fab{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom));box-shadow:0 4px 14px rgba(0,0,0,.28);border-radius:99px!important;padding:14px 20px!important}
+.thumbs{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.thumbs img{width:64px;height:64px;object-fit:cover;border-radius:6px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
+.grid .ph{position:relative}.grid img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px}
+.grid .x{position:absolute;top:4px;right:4px;background:rgba(0,0,0,.65);color:#fff;border:0;border-radius:99px;width:26px;height:26px;font-size:16px;line-height:1}
+.overlay{position:fixed;inset:0;background:var(--bg);z-index:50;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.overlay .bar{position:sticky;top:0;background:var(--blue);color:#fff;display:flex;align-items:center;justify-content:space-between;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;z-index:2}
+.overlay .bar button{background:rgba(255,255,255,.18);color:#fff;border:0;border-radius:8px;padding:8px 14px;font-size:15px;font-weight:600}
+.lightbox{position:fixed;inset:0;background:#000;z-index:100;display:flex;align-items:center;justify-content:center}
+.lightbox img{max-width:100%;max-height:100%}
+.chk{display:flex;align-items:center;gap:10px;margin-top:10px;font-size:16px;color:var(--txt)}
+.chk input{width:22px;height:22px}
+.muted{color:var(--mut);font-size:13px}
+.empty{text-align:center;color:var(--mut);padding:30px 10px}
+.notice{background:#fff8e1;border-color:#f0c36d}
+table.rep{width:100%;border-collapse:collapse;font-size:13px}
+table.rep th,table.rep td{border:1px solid var(--line);padding:5px;vertical-align:top;text-align:left}
+table.rep th{background:#eef2f7}
+.nr{background:#fdeaea}
+/* Camera scan */
+.scan{position:fixed;inset:0;z-index:120;background:#000;color:#fff;display:flex;flex-direction:column}
+.scan .sbar{display:flex;align-items:center;justify-content:space-between;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;background:var(--blue);color:#fff}
+.scan .sbar button{background:rgba(255,255,255,.18);color:#fff;border:0;border-radius:8px;padding:8px 14px;font-size:15px;font-weight:600}
+.scan .vwrap{position:relative;flex:1;min-height:0;background:#000;overflow:hidden}
+.scan .vwrap video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000}
+#scOv{position:absolute;inset:0;pointer-events:none}
+.mk{position:absolute;border:3px solid #fff;border-radius:6px;pointer-events:auto}
+.mk i{position:absolute;left:-3px;top:-23px;font-style:normal;font-size:12px;font-weight:700;padding:1px 6px;border-radius:5px;background:#fff;color:#000;white-space:nowrap}
+.mk.below i{top:auto;bottom:-23px}
+.mk.cand{border-color:rgba(255,255,255,.75);border-style:dashed}
+.mk.ok{border-color:#2ecc71}.mk.ok i{background:#2ecc71}
+.mk.lock{border-width:4px;box-shadow:0 0 0 3px rgba(46,204,113,.4)}
+.mk.warn{border-color:#ffd400}.mk.warn i{background:#ffd400}
+.mk.unst{border-color:#ff8a00;border-style:dashed}.mk.unst i{background:#ff8a00}
+.mk.man{border-color:#4da3ff;border-width:4px}.mk.man i{background:#4da3ff}
+.lpanel{display:flex;gap:6px;padding:8px 10px;background:#111}
+.lchip{flex:1;min-width:0;text-align:center;border-radius:10px;padding:6px 4px;font-size:13px;font-weight:700;background:#2a2a2a;color:#bbb;border:2px solid transparent;line-height:1.25}
+.lchip small{display:block;font-size:13px;font-weight:600}
+.lchip.locked{background:#14532d;color:#fff;border-color:#2ecc71}
+.lchip.manual{background:#123a66;color:#fff;border-color:#4da3ff}
+.lchip.unstable{background:#6b3a00;color:#fff;border-color:#ff8a00}
+.lchip.suggest{background:#5c5200;color:#fff;border-color:#ffd400}
+.chooser{position:absolute;left:8px;right:8px;bottom:8px;background:#fff;color:#111;border-radius:12px;padding:10px;z-index:5;box-shadow:0 4px 18px rgba(0,0,0,.5)}
+.chooser b{display:block;margin-bottom:8px}
+.scan .sfoot{padding:10px 14px calc(12px + env(safe-area-inset-bottom));text-align:center;background:#111}
+.scan .hint{font-size:13px;opacity:.92;margin-bottom:8px;min-height:2.6em}
+.scan.light{background:var(--bg);color:var(--txt);overflow-y:auto}
+.scan.light .sbody{padding:12px;max-width:760px;width:100%;margin:0 auto}
+.scan .shot{width:100%;max-height:34vh;object-fit:contain;border-radius:8px;background:#000;display:block;margin-bottom:10px}
+.nums{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.num{background:#e8eef6;color:var(--blue);border:0;border-radius:99px;padding:7px 13px;font-size:15px;font-weight:600}
+.scan pre{white-space:pre-wrap;font-size:12px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px}
+/* Photo appendix: no frame, no background, image only */
+.prow{display:flex;gap:3mm;margin:0 0 3mm}
+.pfig{flex:1;min-width:0;margin:0;display:flex;flex-direction:column}
+.pfig .cap{font-size:12px;color:var(--mut);margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pfig img{display:block;width:100%;height:auto;border:0;background:none}
+.seg{display:flex;gap:8px;margin-top:8px}.seg .btn{flex:1;padding:10px}
+@page{size:A4;margin:10mm}
+@media print{
+  header.top,.fab,.noprint,.overlay,.lightbox,.scan{display:none!important}
+  body{background:#fff}main{max-width:none;padding:0}
+  .card{border:0;padding:0}
+  tr{page-break-inside:avoid}
+  .prow{break-inside:avoid;margin:0}
+  .pfig{padding:1.5mm}
+  .pfig .cap{font-size:8pt;color:#333;height:4.5mm;margin:0}
+  .pfig img{flex:1 1 0;min-height:0;width:100%;height:100%;object-fit:contain;object-position:center top}
+  .pp4 .prow{height:136mm}
+  .pp2 .prow{height:136mm}
+  .pp1 .prow{height:272mm}
+}
+</style>
+</head>
+<body>
+<header class="top" id="top"></header>
+<main id="app"></main>
+<div id="dlg"></div>
+<div id="lb"></div>
+<div id="scan"></div>
+<input type="file" id="imp" accept="application/json" hidden>
+<input type="file" id="camIn" accept="image/*" capture="environment" hidden>
+<input type="file" id="galIn" accept="image/*" multiple hidden>
+<input type="file" id="scanIn" accept="image/*" capture="environment" hidden>
+
+<script>
+/* ---------- Helpers ---------- */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const pad=n=>String(n).padStart(2,'0');
+const nowStr=()=>{const d=new Date();return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`};
+const todayStr=()=>nowStr().slice(0,10);
+const urlCache=new WeakMap();
+const urlOf=b=>{if(!urlCache.has(b))urlCache.set(b,URL.createObjectURL(b));return urlCache.get(b)};
+
+/* ---------- Storage (IndexedDB) ---------- */
+let dbP=null;
+function db(){
+  if(!dbP)dbP=new Promise((res,rej)=>{
+    const r=indexedDB.open('matprotokoll',1);
+    r.onupgradeneeded=()=>r.result.createObjectStore('protocols',{keyPath:'id'});
+    r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);
+  });
+  return dbP;
+}
+async function tx(mode,fn){
+  const d=await db();
+  return new Promise((res,rej)=>{
+    const t=d.transaction('protocols',mode);const req=fn(t.objectStore('protocols'));
+    t.oncomplete=()=>res(req&&req.result);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error);
+  });
+}
+const dbAll=()=>tx('readonly',s=>s.getAll());
+const dbPut=p=>tx('readwrite',s=>s.put(p));
+const dbDel=id=>tx('readwrite',s=>s.delete(id));
+
+/* ---------- State ---------- */
+let S={protocols:[],view:'list',id:null,draft:null,idx:null,restored:false,scan:null,scanFocus:'sc_laeq',perPage:localStorage.getItem('perPage')||'4'};
+const cur=()=>S.protocols.find(p=>p.id===S.id);
+let saveTimer=null;
+function saveSoon(){clearTimeout(saveTimer);saveTimer=setTimeout(()=>{const p=cur();if(p)dbPut(p)},400)}
+
+async function load(){
+  S.protocols=(await dbAll()).sort((a,b)=>b.created-a.created);
+  const dp=S.protocols.find(p=>p.draft);
+  if(dp){
+    S.id=dp.id;S.view='protocol';render(true);
+    S.idx=dp.draft.idx;S.draft=dp.draft.data;S.restored=true;drawDlg();
+    return;
+  }
+  render(true);
+}
+
+/* ---------- Views ---------- */
+function setTop(title,left,right){
+  $('#top').innerHTML=(left?`<button data-act="${left.act}">${left.txt}</button>`:'')+`<h1>${esc(title)}</h1>`+(right?`<button data-act="${right.act}">${right.txt}</button>`:'');
+}
+function render(scrollTop){
+  const app=$('#app');
+  if(S.view==='list'){setTop('Measurement Log',null,{act:'tools',txt:'Backup'});app.innerHTML=listView();}
+  else if(S.view==='protocol'){const p=cur();setTop(p.project||'Log',{act:'home',txt:'‹ All'},{act:'report',txt:'Report'});app.innerHTML=protocolView(p);}
+  else if(S.view==='report'){const p=cur();setTop('Report',{act:'back',txt:'‹ Back'},{act:'print',txt:'Print / PDF'});app.innerHTML=reportView(p);}
+  if(scrollTop)window.scrollTo(0,0);
+}
+
+function listView(){
+  const items=S.protocols.map(p=>{
+    const n=p.meas.length,nr=p.meas.filter(m=>m.notMeasured).length,ph=p.meas.reduce((a,m)=>a+m.photos.length,0);
+    return `<button class="item" data-act="open" data-id="${p.id}">
+      <div class="t">${esc(p.project||'(unnamed)')}</div>
+      <div class="s">${esc(p.date)} · ${esc(p.instrument||'no instrument')}</div>
+      <div class="s"><span class="chip">${n} measurements</span>${nr?`<span class="chip red">${nr} not measured</span>`:''}<span class="chip">${ph} photos</span></div>
+    </button>`}).join('');
+  const ready=localStorage.getItem('ocrReady')==='1';
+  return `${items||'<div class="empty">No logs yet.<br>Tap the button below to create one.</div>'}
+    <div class="card"><h2>Camera scan</h2>
+      <p class="muted">The reading engine is downloaded once (internet needed) and is then stored on the phone. ${ready?'<b>Downloaded on this phone.</b>':'Not downloaded yet.'}</p>
+      <button class="btn sec block" id="prepBtn" data-act="prepScan">${ready?'Re-check scanner':'Download scanner for offline use'}</button></div>
+    <button class="btn fab" data-act="newProt">+ New log</button>`;
+}
+
+function protocolView(p){
+  const rows=p.meas.map((m,i)=>{
+    const vals=m.notMeasured?'':[m.laeq!==''?`LAeq ${esc(m.laeq)}`:'',m.lamax!==''?`LAmax ${esc(m.lamax)}`:'',m.lceq!==''?`LCeq ${esc(m.lceq)}`:''].filter(Boolean).join(' · ');
+    return `<button class="item" data-act="editMeas" data-i="${i}">
+      <div class="t">${esc(m.room||'(room missing)')}${m.position?' – '+esc(m.position):''}</div>
+      <div class="s">${esc(m.time)}${vals?' · '+vals+' dB':''}</div>
+      <div class="s">${m.notMeasured?'<span class="chip red">Not measured</span>':'<span class="chip green">Measured</span>'}${m.bs?`<span class="chip">BS ${esc(m.bs)}</span>`:''}</div>
+      ${m.photos.length?`<div class="thumbs">${m.photos.slice(0,5).map(f=>`<img src="${urlOf(f.blob)}" alt="">`).join('')}${m.photos.length>5?`<span class="muted">+${m.photos.length-5}</span>`:''}</div>`:''}
+    </button>`}).join('');
+  return `<div class="card"><h2>Project info</h2>
+    <label>Project</label><input data-f="project" value="${esc(p.project)}" placeholder="e.g. Meydan One Mall">
+    <div class="row"><div><label>Date</label><input data-f="date" type="date" value="${esc(p.date)}"></div>
+    <div><label>Operator</label><input data-f="operator" value="${esc(p.operator)}"></div></div>
+    <label>Instrument</label><input data-f="instrument" value="${esc(p.instrument)}" placeholder="e.g. Nor145-1">
+    <label>General notes</label><textarea data-f="notes">${esc(p.notes)}</textarea>
+    <label class="chk"><input type="checkbox" data-f="stamp" ${p.stamp!==false?'checked':''}> Stamp date/time on photos</label>
+  </div>
+  <h2 style="margin:16px 4px 8px;font-size:15px;color:var(--mut)">MEASUREMENTS (${p.meas.length})</h2>
+  ${rows||'<div class="empty">No measurements yet.</div>'}
+  <div class="card noprint"><button class="btn sec block" data-act="csv">Export CSV (Excel)</button>
+  <button class="btn sec block" data-act="report">View report with photos</button>
+  <button class="btn danger block" data-act="delProt">Delete log</button></div>
+  <button class="btn fab" data-act="newMeas">+ New measurement</button>`;
+}
+
+function reportView(p){
+  const pp=S.perPage,perRow=pp==='4'?2:1;
+  const rows=p.meas.map((m,i)=>`<tr class="${m.notMeasured?'nr':''}">
+    <td>${i+1}</td><td>${esc(m.room)}<br><span class="muted">${esc(m.position)}</span></td><td>${esc(m.time)}</td>
+    <td>${m.notMeasured?'<b>Not measured</b>':`LAeq: ${esc(m.laeq)||'–'}<br>LAmax: ${esc(m.lamax)||'–'}<br>LCeq: ${esc(m.lceq)||'–'}`}</td>
+    <td>${esc(m.bs)||'–'}<br><span class="muted">${esc(m.system)}</span></td>
+    <td>${esc(m.comment)}</td>
+    <td>${m.photos.length||'–'}</td></tr>`).join('');
+  const figs=[];
+  p.meas.forEach((m,i)=>m.photos.forEach((f,j)=>{
+    figs.push(`<figure class="pfig"><div class="cap">${i+1}. ${esc(m.room||'(room missing)')}${m.position?' – '+esc(m.position):''}${m.photos.length>1?' ('+(j+1)+'/'+m.photos.length+')':''}</div><img src="${urlOf(f.blob)}" data-act="zoomR" data-i="${i}" data-j="${j}" alt=""></figure>`);
+  }));
+  let photos='';
+  for(let k=0;k<figs.length;k+=perRow){
+    const chunk=figs.slice(k,k+perRow);
+    while(chunk.length<perRow)chunk.push('<figure class="pfig"></figure>');
+    photos+=`<div class="prow">${chunk.join('')}</div>`;
+  }
+  const opt=(v,t)=>`<button class="btn ${pp===v?'':'sec'}" data-act="perPage" data-v="${v}">${t}</button>`;
+  return `<div class="card"><h2 style="font-size:20px;color:var(--txt);text-transform:none">${esc(p.project)}</h2>
+  <p class="muted">Date: ${esc(p.date)} · Operator: ${esc(p.operator)||'–'} · Instrument: ${esc(p.instrument)||'–'}</p>
+  ${p.notes?`<p>${esc(p.notes)}</p>`:''}
+  <div style="overflow-x:auto"><table class="rep"><thead><tr><th>#</th><th>Room / position</th><th>Time</th><th>Levels [dB]</th><th>Building services</th><th>Comment</th><th>Photos</th></tr></thead><tbody>${rows}</tbody></table></div></div>
+  <div class="card noprint"><h2>Photos per A4 page</h2>
+    <div class="seg">${opt('4','4')}${opt('2','2')}${opt('1','1')}</div>
+    <p class="muted">Each photo is shown as large as possible in its slot, without frame. 4 = two columns, two rows. 2 = two stacked. 1 = one photo per page. Tap a photo to zoom.</p></div>
+  <div class="pp${pp}">${photos||'<div class="empty">No photos in this log.</div>'}</div>`;
+}
+
+/* ---------- Measurement dialog ---------- */
+function newMeas(){return {id:uid(),room:'',position:'',time:nowStr(),laeq:'',lamax:'',lceq:'',bs:'',system:'',notMeasured:false,comment:'',photos:[]}}
+function openMeas(i){
+  const p=cur();S.restored=false;
+  S.idx=i;
+  S.draft=i==null?newMeas():{...p.meas[i],photos:[...p.meas[i].photos]};
+  if(i==null&&p.meas.length){S.draft.room=p.meas[p.meas.length-1].room}
+  drawDlg();
+}
+function drawDlg(){
+  const d=S.draft;
+  $('#dlg').innerHTML=`<div class="overlay"><div class="bar"><button data-act="closeDlg">Cancel</button><b>${S.idx==null?'New measurement':'Edit measurement'}</b><button data-act="saveMeas">Save</button></div>
+  <main>
+  ${S.restored?'<div class="card notice">Measurement in progress restored. Tap <b>Save</b> to keep it.</div>':''}
+  <div class="card">
+    <label>Room</label><input id="m_room" value="${esc(d.room)}" placeholder="e.g. Dining 3">
+    <div class="row"><div><label>Position</label><input id="m_position" value="${esc(d.position)}" placeholder="P.1"></div>
+    <div><label>Time</label><input id="m_time" value="${esc(d.time)}"></div></div>
+    <label class="chk"><input type="checkbox" id="m_nm" ${d.notMeasured?'checked':''}> Not measured</label>
+  </div>
+  <div class="card"><div class="hdr"><h2>Levels [dB]</h2><button class="btn sm" data-act="scan">📷 Camera scan</button></div>
+    <div class="row"><div><label>LAeq</label><input id="m_laeq" inputmode="decimal" value="${esc(d.laeq)}"></div>
+    <div><label>LAmax</label><input id="m_lamax" inputmode="decimal" value="${esc(d.lamax)}"></div>
+    <div><label>LCeq</label><input id="m_lceq" inputmode="decimal" value="${esc(d.lceq)}"></div></div>
+  </div>
+  <div class="card"><h2>Building services</h2>
+    <div class="row"><div><label>Mode</label><select id="m_bs"><option value="">–</option><option ${d.bs==='ON'?'selected':''}>ON</option><option ${d.bs==='OFF'?'selected':''}>OFF</option></select></div>
+    <div><label>System</label><input id="m_system" value="${esc(d.system)}" placeholder="AC, fan…"></div></div>
+  </div>
+  <div class="card"><label style="margin-top:0">Comment</label><textarea id="m_comment">${esc(d.comment)}</textarea></div>
+  <div class="card"><h2>Photos</h2>
+    <div class="row"><button class="btn" data-act="cam">📷 Take photo</button><button class="btn sec" data-act="gal">Choose image</button></div>
+    <div id="photoGrid">${photoGrid()}</div>
+  </div>
+  ${S.idx!=null?'<button class="btn danger block" data-act="delMeas">Delete measurement</button>':''}
+  </main></div>`;
+}
+function photoGrid(){
+  const ph=S.draft.photos;
+  return ph.length?`<div class="grid">${ph.map((f,i)=>`<div class="ph"><img src="${urlOf(f.blob)}" data-act="zoom" data-i="${i}" alt=""><button class="x" data-act="delPhoto" data-i="${i}">×</button></div>`).join('')}</div>`:'<p class="muted">No photos yet.</p>';
+}
+function readDraft(){
+  const g=id=>$('#'+id).value;
+  Object.assign(S.draft,{room:g('m_room').trim(),position:g('m_position').trim(),time:g('m_time'),laeq:g('m_laeq').trim(),lamax:g('m_lamax').trim(),lceq:g('m_lceq').trim(),bs:g('m_bs'),system:g('m_system').trim(),comment:g('m_comment').trim(),notMeasured:$('#m_nm').checked});
+}
+
+/* ---------- Draft autosave ---------- */
+let draftTimer=null;
+function saveDraft(){
+  clearTimeout(draftTimer);
+  const p=cur();if(!p||!S.draft||!$('#m_room'))return;
+  readDraft();p.draft={idx:S.idx,data:S.draft};dbPut(p);
+}
+function saveDraftSoon(){clearTimeout(draftTimer);draftTimer=setTimeout(saveDraft,600)}
+async function clearDraft(){
+  clearTimeout(draftTimer);
+  const p=cur();if(p&&p.draft){delete p.draft;await dbPut(p);}
+}
+
+/* ---------- Photos ---------- */
+function loadImg(file){
+  return new Promise((res,rej)=>{const u=URL.createObjectURL(file);const im=new Image();im.onload=()=>{URL.revokeObjectURL(u);res(im)};im.onerror=rej;im.src=u;});
+}
+async function processPhoto(file,d){
+  const p=cur(),ts=nowStr();
+  const im=await loadImg(file);
+  const max=2400,sc=Math.min(1,max/Math.max(im.naturalWidth,im.naturalHeight));
+  const w=Math.round(im.naturalWidth*sc),h=Math.round(im.naturalHeight*sc);
+  const c=document.createElement('canvas');c.width=w;c.height=h;
+  const x=c.getContext('2d');x.drawImage(im,0,0,w,h);
+  if(p.stamp!==false){
+    if(S.draft===d&&$('#m_room'))readDraft();
+    const label=[ts,d.room,d.position].filter(Boolean).join('  |  ');
+    const fs=Math.max(14,Math.round(w/38));
+    x.font=`bold ${fs}px Arial,sans-serif`;
+    const tw=x.measureText(label).width,pd=fs*.4;
+    x.fillStyle='rgba(0,0,0,.6)';x.fillRect(0,h-fs-pd*2,Math.min(w,tw+pd*2),fs+pd*2);
+    x.fillStyle='#fff';x.textBaseline='middle';x.fillText(label,pd,h-fs/2-pd);
+  }
+  const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.85));
+  return {id:uid(),blob,ts};
+}
+async function addPhotos(files){
+  const d=S.draft,p=cur();
+  for(const f of files){
+    try{d.photos.push(await processPhoto(f,d));}catch(e){alert('Could not read the image.')}
+  }
+  if(S.draft===d&&$('#photoGrid')){$('#photoGrid').innerHTML=photoGrid();saveDraft();}
+  else if(p)await dbPut(p);
+}
+
+/* ---------- Display parser + live tracker (pure functions, unit-tested) ---------- */
+/* Rules: a number followed by dBA goes to LAeq, followed by dBC goes to LCeq,
+   and a number next to an LAmax label goes to LAmax. A number is never put in a
+   field whose weighting contradicts its unit (a dBC value can never land in LAeq). */
+/* PARSER START */
+const LABELS=[['lamax',/^L[A4][FSI]?M{1,2}[A4]?X/],['laeq',/^L[A4][FSI]?E[QO0]/],['lceq',/^L[CG][FSI]?E[QO0]/]];
+function labelOf(t){
+  const c=String(t).toUpperCase().replace(/[^A-Z0-9]/g,'');
+  for(const [k,re] of LABELS)if(re.test(c))return k;
+  return null;
+}
+function unitTok(t){
+  const c=String(t).toUpperCase().replace(/[^A-Z0-9()]/g,'');
+  const m=c.match(/^(?:DB|D8)\(?([AC4GZ])?\)?$/);
+  if(!m)return null;
+  const L=m[1]||'';
+  return {u:L==='4'?'A':L==='G'?'C':L};
+}
+const compatible=(k,N)=>k==='lceq'?(N.u===''||N.u==='C'):(N.u===''||N.u==='A');
+/* 'ok' = unit read and not contradicting; 'warn' = unit missing or unreadable */
+const stateOf=(k,N)=>(N.u==='?'||(N.u===''&&!N.ut))?'warn':(compatible(k,N)?'ok':'warn');
+function parseDisplay(words,text){
+  const out={laeq:'',lamax:'',lceq:'',nums:[],warn:{},src:{},marks:[]};
+  const items=(words||[]).filter(w=>w&&w.text&&String(w.text).trim()&&w.bbox).map((w,i)=>{
+    const b=w.bbox;
+    return {i,t:String(w.text).trim(),x0:b.x0,y0:b.y0,x1:b.x1,y1:b.y1,cx:(b.x0+b.x1)/2,cy:(b.y0+b.y1)/2,h:Math.max(1,b.y1-b.y0),w:Math.max(1,b.x1-b.x0)};
+  });
+  if(items.length){
+    const labels=[],units=[],nums=[];
+    const addNum=(it,s,u,isInt,ut)=>{
+      const v=parseFloat(s);
+      if(isInt?(v<20||v>140):(v<10||v>160))return;
+      nums.push({...it,s,u,int:isInt,ut:!!ut,bx0:it.x0,by0:it.y0,bx1:it.x1,by1:it.y1});
+    };
+    for(const it of items){
+      const k=labelOf(it.t);
+      if(k)labels.push({...it,k});
+      const ut=unitTok(it.t);
+      if(ut)units.push({...it,u:ut.u});
+      const t=it.t.replace(/,/g,'.');
+      const glued=t.match(/^(\d{2,3})(\.\d{1,2})?\s*d[B8]\(?([AC4GZ])?\)?$/i);
+      if(glued){addNum(it,glued[1]+(glued[2]||''),({'4':'A','G':'C'})[(glued[3]||'').toUpperCase()]||(glued[3]||'').toUpperCase(),!glued[2],true);continue;}
+      for(const m of t.matchAll(/(?<![\d.])(\d{2,3}\.\d{1,2})(?!\d)/g))addNum(it,m[1],undefined,false,false);
+      if(!k&&/^\d{2,3}$/.test(t))addNum(it,t,undefined,true,false);
+    }
+    // attach the unit that follows each number on the same row
+    for(const N of nums){
+      if(N.u!==undefined)continue;
+      N.u='';
+      let best=null;
+      for(const U of units){
+        const dy=Math.abs(U.cy-N.cy),dx=U.x0-N.x1;
+        if(dy<=0.8*Math.max(N.h,U.h)&&dx>=-N.w*0.3&&dx<=6*N.h&&(!best||dx<best.dx))best={U,dx};
+      }
+      if(!best){
+        for(const it of items){
+          if(it.i===N.i)continue;
+          const dy=Math.abs(it.cy-N.cy),dx=it.x0-N.x1;
+          if(dy<=0.8*N.h&&dx>=-N.w*0.3&&dx<=4*N.h&&/^[A-Za-z()]{1,5}$/.test(it.t)&&!labelOf(it.t)&&!unitTok(it.t)){N.u='?';break;}
+        }
+      }
+      if(best){
+        N.u=best.U.u;N.ut=true;
+        N.bx1=Math.max(N.bx1,best.U.x1);N.by0=Math.min(N.by0,best.U.y0);N.by1=Math.max(N.by1,best.U.y1);
+        if(!N.u){
+          for(const it of items){
+            const mm=it.t.match(/^\(?([ACZ])\)?$/i);
+            if(mm&&Math.abs(it.cy-N.cy)<=0.8*N.h&&it.x0>=best.U.x1-it.w*0.3&&it.x0-best.U.x1<=2*N.h){
+              N.u=mm[1].toUpperCase();N.bx1=Math.max(N.bx1,it.x1);break;
+            }
+          }
+        }
+      }
+    }
+    // 1) label next to / above the number
+    const pairs=[];
+    for(const L of labels)for(const N of nums){
+      let sc=null,row=false;
+      if(N.i===L.i){sc=-1;row=true;}
+      else{
+        const rowTol=0.8*Math.max(L.h,N.h),dy=N.cy-L.cy,dx=N.x0-L.x1;
+        if(Math.abs(dy)<=rowTol&&dx>=-L.w*0.3){sc=Math.max(0,dx)/L.h;row=true;}
+        else if(dy>0&&dy<L.h*6&&Math.abs(N.cx-L.cx)<=Math.max(L.w,N.w)*1.2)sc=40+dy/L.h;
+      }
+      if(sc==null)continue;
+      if(!(compatible(L.k,N)||(N.u==='?'&&row)))continue;
+      pairs.push({L,N,sc:sc+(N.int?200:0)});
+    }
+    pairs.sort((a,b)=>a.sc-b.sc);
+    const used=new Set();
+    for(const p of pairs){
+      if(out[p.L.k]||used.has(p.N))continue;
+      out[p.L.k]=p.N.s;used.add(p.N);p.N.field=p.L.k;
+      const st=stateOf(p.L.k,p.N);
+      out.src[p.L.k]={s:p.N.s,u:p.N.u,state:st};
+      if(st==='warn')out.warn[p.L.k]=true;
+    }
+    // 2) unit only: one unused dBA number -> LAeq, one unused dBC number -> LCeq
+    if(!out.laeq){const c=nums.filter(N=>!used.has(N)&&N.u==='A');if(c.length===1){out.laeq=c[0].s;used.add(c[0]);c[0].field='laeq';out.src.laeq={s:c[0].s,u:'A',state:'ok'};}}
+    if(!out.lceq){const c=nums.filter(N=>!used.has(N)&&N.u==='C');if(c.length===1){out.lceq=c[0].s;used.add(c[0]);c[0].field='lceq';out.src.lceq={s:c[0].s,u:'C',state:'ok'};}}
+    // marks: every relevant number with its box, field and state (used by the live overlay)
+    let base=nums.filter(n=>!n.int||n.u);if(!base.length)base=nums;
+    const baseSet=new Set(base);
+    const sorted=nums.filter(n=>baseSet.has(n)||n.field).sort((a,b)=>(Math.round(a.cy/Math.max(a.h,1))-Math.round(b.cy/Math.max(b.h,1)))||(a.cx-b.cx));
+    out.marks=sorted.map(n=>({s:n.s,u:n.u,ut:n.ut,field:n.field||'',state:n.field?stateOf(n.field,n):'cand',box:{x0:n.bx0,y0:n.by0,x1:n.bx1,y1:n.by1}}));
+    const seen=new Set();
+    out.nums=out.marks.filter(m=>{const k=m.s+'|'+m.u;if(seen.has(k))return false;seen.add(k);return true;}).map(m=>({s:m.s,u:m.u})).slice(0,12);
+  }else if(text){
+    for(const line of String(text).split(/\r?\n/)){
+      const l=line.replace(/,/g,'.');
+      for(const m of l.matchAll(/(L[A-Z4][FSI]?[A-Z0-9]{2,3})\W*?(\d{2,3}\.\d{1,2})/gi)){
+        const k=labelOf(m[1]);if(k&&!out[k])out[k]=m[2];
+      }
+      for(const m of l.matchAll(/(?<![\d.])(\d{2,3}\.\d{1,2})(?!\d)/g))out.nums.push({s:m[1],u:''});
+    }
+    out.nums=out.nums.filter((n,i,a)=>a.findIndex(x=>x.s===n.s)===i).slice(0,12);
+  }
+  return out;
+}
+
+/* Live tracker: votes over the last frames, so a single misread frame never decides a value.
+   locked   = same value with a confirmed unit in >=3 of the last 5 frames and no rival value more than once
+   unstable = two different values each seen >=2 times (e.g. the instrument is still measuring)
+   suggest  = value seen but unit missing/unreadable (needs a tap to accept)
+   manual   = value the user assigned by tapping */
+const FIELDS=['laeq','lamax','lceq'];
+function trackerNew(){return {hist:[],manual:{}};}
+function trackerPush(T,res,n){T.hist.push(res);while(T.hist.length>(n||5))T.hist.shift();}
+function trackerState(T){
+  const st={};
+  for(const k of FIELDS){
+    const ok={},w={};
+    for(const r of T.hist){
+      const s=r&&r.src&&r.src[k];if(!s)continue;
+      if(s.state==='ok')ok[s.s]=(ok[s.s]||0)+1;else w[s.s]=(w[s.s]||0)+1;
+    }
+    const e=Object.entries(ok).sort((a,b)=>b[1]-a[1]),ws=Object.entries(w).sort((a,b)=>b[1]-a[1]);
+    if(T.manual[k])st[k]={status:'manual',value:T.manual[k].s,u:T.manual[k].u};
+    else if(e.length&&e[0][1]>=3&&(!e[1]||e[1][1]<=1))st[k]={status:'locked',value:e[0][0]};
+    else if(e.length>=2&&e[0][1]>=2&&e[1][1]>=2)st[k]={status:'unstable',values:[e[0][0],e[1][0]]};
+    else if(!e.length&&ws.length&&ws[0][1]>=2)st[k]={status:'suggest',value:ws[0][0]};
+    else if(e.length)st[k]={status:'pending',value:e[0][0]};
+    else st[k]={status:'none'};
+  }
+  return st;
+}
+/* PARSER END */
+
+/* ---------- Camera scan ---------- */
+const TESS_URL='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+const NAME={laeq:'LAeq',lamax:'LAmax',lceq:'LCeq'};
+let tessWorker=null,tessLoading=null,ocrProg=null,camStream=null;
+let live={on:false,gen:0,T:trackerNew(),last:null,marks:[],dim:null,flip:false,frames:0,timer:null,ovHtml:'',paHtml:'',pick:-1};
+function loadScript(src){
+  return new Promise((res,rej)=>{
+    if(window.Tesseract)return res();
+    const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>rej(new Error('Could not load the scanner engine'));document.head.appendChild(s);
+  });
+}
+function getOcr(){
+  if(tessWorker)return Promise.resolve(tessWorker);
+  if(!tessLoading)tessLoading=(async()=>{
+    await loadScript(TESS_URL);
+    const w=await Tesseract.createWorker('eng',1,{logger:m=>{if(ocrProg)ocrProg(m)}});
+    await w.setParameters({tessedit_pageseg_mode:'11'});
+    tessWorker=w;localStorage.setItem('ocrReady','1');
+    return w;
+  })().catch(e=>{tessLoading=null;throw e});
+  return tessLoading;
+}
+function prep(src,invert){
+  const c=document.createElement('canvas');c.width=src.width;c.height=src.height;
+  const x=c.getContext('2d');x.drawImage(src,0,0);
+  const id=x.getImageData(0,0,c.width,c.height),d=id.data,n=d.length/4,g=new Uint8Array(n),hist=new Uint32Array(256);
+  for(let i=0;i<n;i++){const v=(0.299*d[i*4]+0.587*d[i*4+1]+0.114*d[i*4+2])|0;g[i]=v;hist[v]++;}
+  let acc=0,lo=0,hi=255;
+  for(let v=0;v<256;v++){acc+=hist[v];if(acc>=n*0.02){lo=v;break;}}
+  acc=0;for(let v=255;v>=0;v--){acc+=hist[v];if(acc>=n*0.02){hi=v;break;}}
+  const rng=Math.max(1,hi-lo);
+  for(let i=0;i<n;i++){let v=Math.max(0,Math.min(255,(g[i]-lo)*255/rng));if(invert)v=255-v;d[i*4]=d[i*4+1]=d[i*4+2]=v;d[i*4+3]=255;}
+  x.putImageData(id,0,0);return c;
+}
+async function ocrCanvas(w,cv){
+  const r=await w.recognize(cv),d=r.data;
+  let words=d.words;
+  if(!words&&d.blocks){words=[];d.blocks.forEach(b=>(b.paragraphs||[]).forEach(p=>(p.lines||[]).forEach(l=>(l.words||[]).forEach(x=>words.push(x)))));}
+  return {...parseDisplay(words,d.text),text:d.text||''};
+}
+const foundCount=r=>FIELDS.filter(k=>r[k]).length;
+const setMsg=t=>{const el=$('#scMsg');if(el)el.textContent=t};
+const setHint=t=>{const el=$('#scHint');if(el&&el.textContent!==t)el.textContent=t};
+
+/* --- live tracking loop --- */
+function liveStop(){live.on=false;live.gen++;clearTimeout(live.timer);}
+function liveStart(){
+  liveStop();
+  live={on:true,gen:live.gen,T:trackerNew(),last:null,marks:[],dim:null,flip:false,frames:0,timer:null,ovHtml:'',paHtml:'',pick:-1};
+  liveLoop(live.gen);
+}
+async function liveLoop(gen){
+  if(!live.on||gen!==live.gen)return;
+  const next=ms=>{if(live.on&&gen===live.gen)live.timer=setTimeout(()=>liveLoop(gen),ms);};
+  const v=$('#scV');
+  if(!v||!v.videoWidth||document.hidden){next(300);return;}
+  try{
+    if(!tessWorker)setHint('Preparing scanner… (internet is needed the first time)');
+    const w=await getOcr();
+    if(!live.on||gen!==live.gen)return;
+    const sc=Math.min(1,1000/Math.max(v.videoWidth,v.videoHeight));
+    const c=document.createElement('canvas');c.width=Math.round(v.videoWidth*sc);c.height=Math.round(v.videoHeight*sc);
+    c.getContext('2d').drawImage(v,0,0,c.width,c.height);
+    const res=await ocrCanvas(w,prep(c,live.flip));
+    if(!live.on||gen!==live.gen)return;
+    live.dim={w:c.width,h:c.height};live.last=res;live.frames++;
+    trackerPush(live.T,res);
+    if(foundCount(res)<2)live.flip=!live.flip;   // try the other polarity when little is found
+    drawLive();
+  }catch(e){
+    setHint('Live reading is not available (scanner engine missing). Tap "Use photo instead" or type the values yourself.');
+    return;
+  }
+  next(120);
+}
+function liveSummary(){
+  const st=trackerState(live.T);
+  const n=FIELDS.filter(k=>st[k].status==='locked'||st[k].status==='manual').length;
+  return {st,n};
+}
+function drawLive(){
+  if(!S.scan||S.scan.stage!=='cam'||!live.on)return;
+  const v=$('#scV'),wr=$('#scWrap'),ov=$('#scOv'),pa=$('#scPanel');
+  if(!v||!wr||!ov||!pa||!v.videoWidth||!live.dim)return;
+  const {st,n}=liveSummary(),T=live.T;
+  live.marks=(live.last&&live.last.marks)||[];
+  const cw=wr.clientWidth,ch=wr.clientHeight,vw=v.videoWidth,vh=v.videoHeight;
+  const k=Math.min(cw/vw,ch/vh),ox=(cw-vw*k)/2,oy=(ch-vh*k)/2,s=live.dim.w/vw;
+  const X=x=>ox+(x/s)*k,Y=y=>oy+(y/s)*k;
+  let html='';
+  live.marks.forEach((m,i)=>{
+    let cls='cand',tag=m.u?('dB'+(m.u==='?'?'?':m.u)):'';
+    const man=FIELDS.find(f=>T.manual[f]&&T.manual[f].s===m.s&&T.manual[f].u===m.u);
+    if(man){cls='man';tag=NAME[man]+' 📌';}
+    else if(m.field){
+      const f=st[m.field];
+      if(f.status==='unstable'){cls='unst';tag=NAME[m.field]+' changing';}
+      else if(m.state==='ok'){const lk=f.status==='locked'&&f.value===m.s;cls='ok'+(lk?' lock':'');tag=NAME[m.field]+(lk?' ✓':'');}
+      else{cls='warn';tag=NAME[m.field]+' (check unit)';}
+    }
+    const L=X(m.box.x0)-4,T0=Y(m.box.y0)-4,W=X(m.box.x1)-X(m.box.x0)+8,H=Y(m.box.y1)-Y(m.box.y0)+8;
+    html+=`<div class="mk ${cls}${T0<26?' below':''}" data-i="${i}" style="left:${L.toFixed(1)}px;top:${T0.toFixed(1)}px;width:${W.toFixed(1)}px;height:${H.toFixed(1)}px"><i>${esc(tag)}</i></div>`;
+  });
+  if(html!==live.ovHtml){ov.innerHTML=html;live.ovHtml=html;}
+  const chip=f=>{
+    const x=st[f];let c=x.status,t='–';
+    if(x.status==='locked')t=x.value+' ✓';
+    else if(x.status==='manual')t=x.value+' 📌';
+    else if(x.status==='unstable')t='changing';
+    else if(x.status==='suggest')t=x.value+' ?';
+    else if(x.status==='pending')t='…';
+    return `<div class="lchip ${c}" data-act="chipClear" data-f="${f}">${NAME[f]}<small>${esc(t)}</small></div>`;
+  };
+  const ph=FIELDS.map(chip).join('');
+  if(ph!==live.paHtml){pa.innerHTML=ph;live.paHtml=ph;}
+  const btn=$('#scUse');if(btn){btn.disabled=n===0;btn.textContent=`Use values (${n}/3)`;}
+  const unst=FIELDS.some(f=>st[f].status==='unstable'),sug=FIELDS.some(f=>st[f].status==='suggest');
+  setHint(n===3?'All three values are locked. Tap "Use values".':
+    unst?'A value keeps changing. Stop the measurement on the instrument, or hold steady.':
+    sug?'Yellow = unit not read. Tap the yellow box to assign it, or move closer.':
+    'Hold steady. Green = read with the right unit, orange = changing, white dashed = other numbers (tap to assign).');
+}
+function openChooser(i){
+  const m=live.marks[i];if(!m)return;live.pick=i;
+  $('#scChoose').innerHTML=`<div class="chooser"><b>${esc(m.s)}${m.u&&m.u!=='?'?' dB'+esc(m.u):''} → put in:</b>
+    <div class="row"><button class="btn sm" data-act="mkAssign" data-f="laeq">LAeq</button><button class="btn sm" data-act="mkAssign" data-f="lamax">LAmax</button><button class="btn sm" data-act="mkAssign" data-f="lceq">LCeq</button><button class="btn sm sec" data-act="mkCancel">Cancel</button></div></div>`;
+}
+function assignMark(f){
+  const m=live.marks[live.pick];$('#scChoose').innerHTML='';if(!m)return;
+  const bad=(f==='lceq'&&m.u==='A')||(f!=='lceq'&&m.u==='C');
+  if(bad&&!confirm(`This number was read as dB${m.u}. Put it in ${NAME[f]} anyway?`))return;
+  live.T.manual[f]={s:m.s,u:m.u};live.ovHtml='';live.paHtml='';drawLive();
+}
+function useLive(){
+  const v=$('#scV');if(!v||!v.videoWidth)return;
+  const {st}=liveSummary();
+  const res={laeq:'',lamax:'',lceq:'',nums:(live.last&&live.last.nums)||[],text:'(live tracking: values confirmed over several frames)',warn:{},src:{},marks:[]};
+  for(const f of FIELDS)if(st[f].status==='locked'||st[f].status==='manual')res[f]=st[f].value;
+  const c=canvasFrom(v,v.videoWidth,v.videoHeight);
+  liveStop();stopCam();
+  c.toBlob(b=>{S.scan={stage:'review',blob:b,res,error:''};drawScan();},'image/jpeg',.85);
+}
+
+/* --- camera --- */
+function enterCam(){S.scan={stage:'cam'};drawScan();startCam();liveStart();}
+function openScan(){enterCam();getOcr().catch(()=>{});}
+async function startCam(){
+  const v=$('#scV');if(!v)return;
+  try{
+    camStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}},audio:false});
+    v.srcObject=camStream;await v.play();
+  }catch(e){
+    setHint('Camera not available here. Tap "Use photo instead", or allow camera access.');
+  }
+}
+function stopCam(){if(camStream){camStream.getTracks().forEach(t=>t.stop());camStream=null;}}
+function closeScan(){liveStop();stopCam();S.scan=null;ocrProg=null;$('#scan').innerHTML='';}
+function canvasFrom(src,w,h){
+  const sc=Math.min(1,1600/Math.max(w,h)),c=document.createElement('canvas');
+  c.width=Math.round(w*sc);c.height=Math.round(h*sc);c.getContext('2d').drawImage(src,0,0,c.width,c.height);return c;
+}
+async function scanShot(){
+  const v=$('#scV');if(!v||!v.videoWidth)return;
+  const c=canvasFrom(v,v.videoWidth,v.videoHeight);liveStop();stopCam();runScan(c);
+}
+async function scanFile(file){
+  try{const im=await loadImg(file);liveStop();stopCam();runScan(canvasFrom(im,im.naturalWidth,im.naturalHeight));}
+  catch(e){setHint('Could not read that photo.');}
+}
+async function runScan(canvas){
+  const blob=await new Promise(r=>canvas.toBlob(r,'image/jpeg',.85));
+  S.scan={stage:'busy',blob};drawScan();
+  let res={laeq:'',lamax:'',lceq:'',nums:[],text:'',warn:{}},error='';
+  try{
+    ocrProg=m=>{
+      if(m.status==='recognizing text')setMsg('Reading display… '+Math.round((m.progress||0)*100)+'%');
+      else if(m.status)setMsg('Preparing scanner… ('+m.status+')');
+    };
+    setMsg('Preparing scanner…');
+    const w=await getOcr();
+    setMsg('Reading display…');
+    res=await ocrCanvas(w,prep(canvas,false));
+    if(foundCount(res)<3){
+      setMsg('Trying again with inverted colours…');
+      const r2=await ocrCanvas(w,prep(canvas,true));
+      if(foundCount(r2)>foundCount(res))res=r2;
+    }
+  }catch(e){
+    error='The scanner engine could not be loaded or run. It must be downloaded once with internet. You can type the values yourself below.';
+  }
+  ocrProg=null;
+  S.scan={stage:'review',blob,res,error};drawScan();
+}
+function drawScan(){
+  const sc=S.scan,el=$('#scan');
+  if(!sc){el.innerHTML='';return;}
+  if(sc.stage==='cam'){
+    el.innerHTML=`<div class="scan"><div class="sbar"><button data-act="scanClose">Cancel</button><b>Camera scan</b><span style="width:72px"></span></div>
+    <div class="vwrap" id="scWrap"><video id="scV" playsinline muted autoplay></video><div id="scOv"></div><div id="scChoose"></div></div>
+    <div class="lpanel" id="scPanel"></div>
+    <div class="sfoot"><div class="hint" id="scHint">Starting camera…</div>
+    <button class="btn block" style="margin-top:0" id="scUse" data-act="liveUse" disabled>Use values (0/3)</button>
+    <div class="row" style="margin-top:8px"><button class="btn sec sm" data-act="scanPhoto">Use photo instead</button><button class="btn sec sm" data-act="scanShot">Read this frame</button></div></div></div>`;
+  }else if(sc.stage==='busy'){
+    el.innerHTML=`<div class="scan light"><div class="sbar"><b>Reading display…</b><span></span></div>
+    <div class="sbody"><img class="shot" src="${urlOf(sc.blob)}" alt=""><p class="muted" id="scMsg">Starting…</p></div></div>`;
+  }else{
+    const r=sc.res,wk=Object.keys(r.warn||{}),wn={laeq:'LAeq (dBA)',lamax:'LAmax',lceq:'LCeq (dBC)'};
+    const warn=wk.length?`<div class="card notice">⚠ The unit next to ${wk.map(k=>wn[k]).join(', ')} was not read, so the value was filled in from the label only. Check it against the display.</div>`:'';
+    const fld=(id,lab,k)=>`<div><label>${lab}</label><input id="${id}" inputmode="decimal" value="${esc(r[k])}" placeholder="not found"></div>`;
+    const nums=r.nums.length?`<div class="nums">${r.nums.map(n=>`<button class="num" data-act="pickNum" data-v="${esc(n.s)}">${esc(n.s)}${n.u==='?'?' (unit unclear)':n.u?' dB'+esc(n.u):''}</button>`).join('')}</div>`:'<p class="muted">No numbers detected.</p>';
+    el.innerHTML=`<div class="scan light"><div class="sbar"><button data-act="scanClose">Cancel</button><b>Check values</b><span style="width:72px"></span></div>
+    <div class="sbody"><img class="shot" src="${urlOf(sc.blob)}" alt="">
+    ${sc.error?`<div class="card notice">${esc(sc.error)}</div>`:''}${warn}
+    <div class="card"><h2>Detected values [dB]</h2>
+      <div class="row">${fld('sc_laeq','LAeq (dBA)','laeq')}${fld('sc_lamax','LAmax','lamax')}${fld('sc_lceq','LCeq (dBC)','lceq')}</div>
+      <p class="muted" style="margin-top:10px">Check against the display. You can edit any value, or tap a detected number (shown with its unit) to put it in the field you last selected.</p>
+      ${nums}
+      <label class="chk"><input type="checkbox" id="sc_keep"> Also save this display photo in the measurement</label></div>
+    <details class="card"><summary>What the scanner read</summary><pre>${esc(r.text||'(nothing)')}</pre></details>
+    <div class="row"><button class="btn sec" data-act="scanAgain">Scan again</button><button class="btn" data-act="scanUse">Use values</button></div></div></div>`;
+  }
+}
+async function applyScan(){
+  const g=id=>($('#'+id).value||'').trim().replace(',','.');
+  const vals={m_laeq:g('sc_laeq'),m_lamax:g('sc_lamax'),m_lceq:g('sc_lceq')};
+  const keep=$('#sc_keep').checked,blob=S.scan.blob;
+  for(const k in vals)if(vals[k])$('#'+k).value=vals[k];
+  if(keep&&blob){try{S.draft.photos.push(await processPhoto(blob,S.draft));$('#photoGrid').innerHTML=photoGrid();}catch(e){}}
+  closeScan();saveDraft();
+}
+async function prepScan(btn){
+  btn.disabled=true;btn.textContent='Downloading… keep the app open';
+  try{await getOcr();alert('Scanner is ready and stored on this phone.');}
+  catch(e){alert('Could not download the scanner. Check your internet connection and try again.');}
+  render();
+}
+
+/* ---------- Export / backup ---------- */
+function download(name,blob){
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500);
+}
+function exportCSV(p){
+  const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+  const head=['Project','Date','Instrument','Operator','Room','Position','Time','LAeq [dB]','LAmax [dB]','LCeq [dB]','Building services','System','Not measured','Comment','Number of photos'];
+  const lines=[head.map(q).join(';')];
+  p.meas.forEach(m=>lines.push([p.project,p.date,p.instrument,p.operator,m.room,m.position,m.time,m.laeq,m.lamax,m.lceq,m.bs,m.system,m.notMeasured?'Yes':'',m.comment,m.photos.length].map(q).join(';')));
+  download((p.project||'log').replace(/[^\w\-]+/g,'_')+'_'+p.date+'.csv',new Blob(['\ufeff'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'}));
+}
+const b2d=b=>new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result);f.readAsDataURL(b)});
+async function backup(){
+  const out=[];
+  for(const pr of S.protocols){
+    const {draft,...p}=pr;
+    const meas=[];
+    for(const m of p.meas){meas.push({...m,photos:await Promise.all(m.photos.map(async f=>({id:f.id,ts:f.ts,data:await b2d(f.blob)})))});}
+    out.push({...p,meas});
+  }
+  download('measurement_log_backup_'+todayStr()+'.json',new Blob([JSON.stringify(out)],{type:'application/json'}));
+}
+async function restore(file){
+  try{
+    const data=JSON.parse(await file.text());
+    for(const p of data){
+      for(const m of p.meas){m.photos=await Promise.all(m.photos.map(async f=>({id:f.id,ts:f.ts,blob:await (await fetch(f.data)).blob()})));}
+      await dbPut(p);
+    }
+    await load();alert('Backup restored.');
+  }catch(e){alert('Could not read the backup file.')}
+}
+
+/* ---------- Events ---------- */
+document.addEventListener('click',async e=>{
+  const el=e.target.closest('[data-act]');if(!el)return;
+  const a=el.dataset.act,p=cur();
+  switch(a){
+    case 'home':S.view='list';S.id=null;render(true);break;
+    case 'back':S.view='protocol';render(true);break;
+    case 'open':S.id=el.dataset.id;S.view='protocol';render(true);break;
+    case 'newProt':{
+      const n={id:uid(),created:Date.now(),project:'',date:todayStr(),operator:'',instrument:'',notes:'',stamp:true,meas:[]};
+      S.protocols.unshift(n);await dbPut(n);S.id=n.id;S.view='protocol';render(true);break;}
+    case 'delProt':
+      if(confirm('Delete the entire log including photos?')){await dbDel(p.id);S.protocols=S.protocols.filter(x=>x.id!==p.id);S.view='list';S.id=null;render(true);}break;
+    case 'newMeas':openMeas(null);break;
+    case 'editMeas':openMeas(+el.dataset.i);break;
+    case 'closeDlg':
+      readDraft();
+      if((S.draft.photos.length||S.draft.room||S.draft.laeq||S.draft.comment)&&!confirm('Discard this measurement without saving?'))break;
+      await clearDraft();$('#dlg').innerHTML='';S.draft=null;break;
+    case 'saveMeas':
+      readDraft();
+      if(S.idx==null)p.meas.push(S.draft);else p.meas[S.idx]=S.draft;
+      clearTimeout(draftTimer);delete p.draft;
+      await dbPut(p);$('#dlg').innerHTML='';S.draft=null;render();break;
+    case 'delMeas':
+      if(confirm('Delete this measurement?')){clearTimeout(draftTimer);delete p.draft;p.meas.splice(S.idx,1);await dbPut(p);$('#dlg').innerHTML='';S.draft=null;render();}break;
+    case 'cam':$('#camIn').click();break;
+    case 'gal':$('#galIn').click();break;
+    case 'delPhoto':S.draft.photos.splice(+el.dataset.i,1);$('#photoGrid').innerHTML=photoGrid();saveDraft();break;
+    case 'zoom':{const f=S.draft.photos[+el.dataset.i];$('#lb').innerHTML=`<div class="lightbox" data-act="closeLb"><img src="${urlOf(f.blob)}" alt=""></div>`;break;}
+    case 'zoomR':{const f=p.meas[+el.dataset.i].photos[+el.dataset.j];$('#lb').innerHTML=`<div class="lightbox" data-act="closeLb"><img src="${urlOf(f.blob)}" alt=""></div>`;break;}
+    case 'closeLb':$('#lb').innerHTML='';break;
+    case 'report':S.view='report';render(true);break;
+    case 'perPage':S.perPage=el.dataset.v;localStorage.setItem('perPage',S.perPage);render();break;
+    case 'print':window.print();break;
+    case 'csv':exportCSV(p);break;
+    case 'scan':openScan();break;
+    case 'scanClose':closeScan();break;
+    case 'scanShot':scanShot();break;
+    case 'scanPhoto':$('#scanIn').click();break;
+    case 'scanAgain':enterCam();break;
+    case 'scanUse':applyScan();break;
+    case 'liveUse':useLive();break;
+    case 'mkAssign':assignMark(el.dataset.f);break;
+    case 'mkCancel':$('#scChoose').innerHTML='';break;
+    case 'chipClear':{const f=el.dataset.f;if(live.T.manual[f]){delete live.T.manual[f];live.ovHtml='';live.paHtml='';drawLive();}break;}
+    case 'pickNum':{const f=$('#'+(S.scanFocus||'sc_laeq'));if(f)f.value=el.dataset.v;break;}
+    case 'prepScan':prepScan(el);break;
+    case 'tools':
+      if(confirm('OK = Save backup (JSON with all photos).\nCancel = Restore from a backup file.'))backup();else $('#imp').click();break;
+  }
+});
+/* tapping a tracker box reacts on press, because the overlay is redrawn every frame */
+document.addEventListener('pointerdown',e=>{
+  const m=e.target.closest&&e.target.closest('.mk');
+  if(m&&S.scan&&S.scan.stage==='cam')openChooser(+m.dataset.i);
+});
+document.addEventListener('focusin',e=>{if(e.target.id&&e.target.id.startsWith('sc_')&&e.target.type!=='checkbox')S.scanFocus=e.target.id;});
+document.addEventListener('input',e=>{
+  if(e.target.id&&e.target.id.startsWith('m_')&&S.draft){saveDraftSoon();return;}
+  const f=e.target.dataset&&e.target.dataset.f;if(!f||S.view!=='protocol')return;
+  const p=cur();p[f]=e.target.type==='checkbox'?e.target.checked:e.target.value;
+  if(f==='project')$('#top h1').textContent=p.project||'Log';
+  saveSoon();
+});
+$('#camIn').addEventListener('change',async e=>{await addPhotos([...e.target.files]);e.target.value=''});
+$('#galIn').addEventListener('change',async e=>{await addPhotos([...e.target.files]);e.target.value=''});
+$('#scanIn').addEventListener('change',async e=>{const f=e.target.files[0];e.target.value='';if(f)scanFile(f);});
+$('#imp').addEventListener('change',e=>{if(e.target.files[0])restore(e.target.files[0]);e.target.value=''});
+
+/* ---------- Start ---------- */
+if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();
+if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
+load();
+</script>
+</body>
+</html>
