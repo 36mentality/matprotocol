@@ -62,7 +62,7 @@ table.rep th{background:#eef2f7}
 .scan .vwrap{position:relative;flex:1;min-height:0;background:#000;overflow:hidden}
 .scan .vwrap video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000}
 #scOv{position:absolute;inset:0;pointer-events:none}
-.mk{position:absolute;border:3px solid #fff;border-radius:6px;pointer-events:auto}
+.mk{position:absolute;border:3px solid #fff;border-radius:6px;pointer-events:auto;transition:left .18s linear,top .18s linear,width .18s linear,height .18s linear,opacity .3s}
 .mk i{position:absolute;left:-3px;top:-23px;font-style:normal;font-size:12px;font-weight:700;padding:1px 6px;border-radius:5px;background:#fff;color:#000;white-space:nowrap}
 .mk.below i{top:auto;bottom:-23px}
 .mk.cand{border-color:rgba(255,255,255,.75);border-style:dashed}
@@ -71,6 +71,7 @@ table.rep th{background:#eef2f7}
 .mk.warn{border-color:#ffd400}.mk.warn i{background:#ffd400}
 .mk.unst{border-color:#ff8a00;border-style:dashed}.mk.unst i{background:#ff8a00}
 .mk.man{border-color:#4da3ff;border-width:4px}.mk.man i{background:#4da3ff}
+.mk.stale{opacity:.6}
 .lpanel{display:flex;gap:6px;padding:8px 10px;background:#111}
 .lchip{flex:1;min-width:0;text-align:center;border-radius:10px;padding:6px 4px;font-size:13px;font-weight:700;background:#2a2a2a;color:#bbb;border:2px solid transparent;line-height:1.25}
 .lchip small{display:block;font-size:13px;font-weight:600}
@@ -80,8 +81,10 @@ table.rep th{background:#eef2f7}
 .lchip.suggest{background:#5c5200;color:#fff;border-color:#ffd400}
 .chooser{position:absolute;left:8px;right:8px;bottom:8px;background:#fff;color:#111;border-radius:12px;padding:10px;z-index:5;box-shadow:0 4px 18px rgba(0,0,0,.5)}
 .chooser b{display:block;margin-bottom:8px}
+.frozen-tag{position:absolute;left:50%;top:8px;transform:translateX(-50%);background:#4da3ff;color:#fff;font-weight:700;font-size:13px;padding:3px 12px;border-radius:99px;z-index:4}
 .scan .sfoot{padding:10px 14px calc(12px + env(safe-area-inset-bottom));text-align:center;background:#111}
 .scan .hint{font-size:13px;opacity:.92;margin-bottom:8px;min-height:2.6em}
+.scan .sfoot .row .btn.sm{padding:8px 6px;font-size:13px}
 .scan.light{background:var(--bg);color:var(--txt);overflow-y:auto}
 .scan.light .sbody{padding:12px;max-width:760px;width:100%;margin:0 auto}
 .scan .shot{width:100%;max-height:34vh;object-fit:contain;border-radius:8px;background:#000;display:block;margin-bottom:10px}
@@ -463,31 +466,103 @@ function parseDisplay(words,text){
   return out;
 }
 
-/* Live tracker: votes over the last frames, so a single misread frame never decides a value.
-   locked   = same value with a confirmed unit in >=3 of the last 5 frames and no rival value more than once
-   unstable = two different values each seen >=2 times (e.g. the instrument is still measuring)
-   suggest  = value seen but unit missing/unreadable (needs a tap to accept)
-   manual   = value the user assigned by tapping */
+/* ---------- Live tracker (stabilised) ----------
+   Locks are STICKY: once a value is locked it stays locked through missed frames,
+   empty frames and single misreads. It is only released when the last 3 frames that
+   contained that field ALL disagree with it (the instrument really changed).
+   Boxes are persistent TRACKS: they are smoothed against jitter, kept for a few seconds
+   after the last sighting, and locked/pinned boxes are never timed out. */
 const FIELDS=['laeq','lamax','lceq'];
-function trackerNew(){return {hist:[],manual:{}};}
-function trackerPush(T,res,n){T.hist.push(res);while(T.hist.length>(n||5))T.hist.shift();}
+const TTL_C=2500, TTL_F=3500, STALE=700;
+function trackerNew(){return {hist:[],manual:{},lock:{},tracks:{}};}
+const boxOf=m=>({x0:m.box.x0,y0:m.box.y0,x1:m.box.x1,y1:m.box.y1});
+function smoothBox(o,n){
+  const ow=o.x1-o.x0,oh=o.y1-o.y0,ocx=(o.x0+o.x1)/2,ocy=(o.y0+o.y1)/2,ncx=(n.x0+n.x1)/2,ncy=(n.y0+n.y1)/2;
+  if(Math.hypot(ncx-ocx,ncy-ocy)>Math.max(ow,oh)*1.5)return {x0:n.x0,y0:n.y0,x1:n.x1,y1:n.y1};   // real movement: follow at once
+  const a=0.5,f=(p,q)=>p+(q-p)*a;
+  return {x0:f(o.x0,n.x0),y0:f(o.y0,n.y0),x1:f(o.x1,n.x1),y1:f(o.y1,n.y1)};
+}
+function trackerPush(T,res,n,now){
+  now=now==null?Date.now():now;
+  T.hist.push(res);while(T.hist.length>(n||5))T.hist.shift();
+  // 1) boxes: update tracks
+  for(const m of (res&&res.marks)||[]){
+    for(const f of FIELDS){const mm=T.manual[f];if(mm&&mm.s===m.s&&mm.u===m.u){mm.box=mm.box?smoothBox(mm.box,m.box):boxOf(m);mm.last=now;}}
+    let key;
+    if(m.field){const lk=T.lock[m.field];if(lk&&lk.s!==m.s)continue;key='f:'+m.field;}   // a misread never moves a locked box
+    else key='c:'+m.s+'|'+m.u;
+    const t=T.tracks[key];
+    if(t){t.box=smoothBox(t.box,m.box);t.s=m.s;t.u=m.u;t.field=m.field;t.mstate=m.state;t.last=now;}
+    else T.tracks[key]={key,s:m.s,u:m.u,field:m.field,mstate:m.state,box:boxOf(m),last:now};
+  }
+  for(const key of Object.keys(T.tracks)){const t=T.tracks[key];if(!key.startsWith('f:')&&now-t.last>10000)delete T.tracks[key];}
+  // 2) locks (sticky)
+  for(const k of FIELDS){
+    const lk=T.lock[k];
+    if(lk){
+      const data=[];for(const r of T.hist){const s=r&&r.src&&r.src[k];if(s)data.push(s.s);}
+      const l3=data.slice(-3),l2=data.slice(-2);
+      if(lk.weak){   // weak lock = made while a rival value was also in the window: upgrade once it proves itself, release fast if it does not
+        const cnt={};data.forEach(v=>cnt[v]=(cnt[v]||0)+1);
+        if((cnt[lk.s]||0)>=3&&Object.keys(cnt).length===1)lk.weak=false;
+      }
+      if(l3.length===3&&l3.every(v=>v!==lk.s))delete T.lock[k];     // 3 data frames in a row disagree: really changed
+      else if(lk.weak&&l2.length===2&&l2[0]!==lk.s&&l2[0]===l2[1])delete T.lock[k];   // weak lock: 2 agreeing frames of another value are enough
+    }
+    if(!T.lock[k]){
+      const ok={};
+      for(const r of T.hist){const s=r&&r.src&&r.src[k];if(s&&s.state==='ok')ok[s.s]=(ok[s.s]||0)+1;}
+      const e=Object.entries(ok).sort((a,b)=>b[1]-a[1]);
+      if(e.length&&e[0][1]>=3&&(!e[1]||e[1][1]<=1))T.lock[k]={s:e[0][0],since:now,weak:!!e[1]};
+    }
+  }
+}
 function trackerState(T){
   const st={};
   for(const k of FIELDS){
+    if(T.manual[k]){st[k]={status:'manual',value:T.manual[k].s,u:T.manual[k].u};continue;}
+    if(T.lock[k]){st[k]={status:'locked',value:T.lock[k].s};continue;}
     const ok={},w={};
     for(const r of T.hist){
       const s=r&&r.src&&r.src[k];if(!s)continue;
       if(s.state==='ok')ok[s.s]=(ok[s.s]||0)+1;else w[s.s]=(w[s.s]||0)+1;
     }
     const e=Object.entries(ok).sort((a,b)=>b[1]-a[1]),ws=Object.entries(w).sort((a,b)=>b[1]-a[1]);
-    if(T.manual[k])st[k]={status:'manual',value:T.manual[k].s,u:T.manual[k].u};
-    else if(e.length&&e[0][1]>=3&&(!e[1]||e[1][1]<=1))st[k]={status:'locked',value:e[0][0]};
-    else if(e.length>=2&&e[0][1]>=2&&e[1][1]>=2)st[k]={status:'unstable',values:[e[0][0],e[1][0]]};
+    if(e.length>=2&&e[0][1]>=2&&e[1][1]>=2)st[k]={status:'unstable',values:[e[0][0],e[1][0]]};
     else if(!e.length&&ws.length&&ws[0][1]>=2)st[k]={status:'suggest',value:ws[0][0]};
     else if(e.length)st[k]={status:'pending',value:e[0][0]};
     else st[k]={status:'none'};
   }
   return st;
+}
+function overlaps(a,b){
+  const cx=(b.x0+b.x1)/2,cy=(b.y0+b.y1)/2,mx=(a.x1-a.x0)*0.25,my=(a.y1-a.y0)*0.25;
+  return cx>=a.x0-mx&&cx<=a.x1+mx&&cy>=a.y0-my&&cy<=a.y1+my;
+}
+/* the boxes to draw right now */
+function trackerTracks(T,now){
+  now=now==null?Date.now():now;
+  const out=[],st=trackerState(T);
+  for(const k of FIELDS){
+    const m=T.manual[k];
+    if(m&&m.box){out.push({key:'m:'+k,field:k,s:m.s,u:m.u,box:m.box,kind:'manual',stale:now-(m.last||0)>STALE});continue;}
+    const t=T.tracks['f:'+k];if(!t)continue;
+    const lk=T.lock[k],age=now-t.last;
+    if(!lk&&age>TTL_F)continue;
+    let kind;
+    if(lk)kind='locked';
+    else if(st[k].status==='unstable')kind='unstable';
+    else kind=t.mstate==='ok'?'ok':'warn';
+    out.push({key:t.key,field:k,s:lk?lk.s:t.s,u:t.u,box:t.box,kind,stale:age>STALE});
+  }
+  const fb=out.map(o=>o.box);
+  for(const key of Object.keys(T.tracks)){
+    const t=T.tracks[key];
+    if(key.startsWith('f:')||now-t.last>TTL_C)continue;
+    if(fb.some(b=>overlaps(b,t.box)))continue;
+    out.push({key,field:'',s:t.s,u:t.u,box:t.box,kind:'cand',stale:now-t.last>STALE});
+  }
+  return out;
 }
 /* PARSER END */
 
@@ -495,7 +570,9 @@ function trackerState(T){
 const TESS_URL='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
 const NAME={laeq:'LAeq',lamax:'LAmax',lceq:'LCeq'};
 let tessWorker=null,tessLoading=null,ocrProg=null,camStream=null;
-let live={on:false,gen:0,T:trackerNew(),last:null,marks:[],dim:null,flip:false,frames:0,timer:null,ovHtml:'',paHtml:'',pick:-1};
+const liveNew=g=>({on:false,gen:g||0,T:trackerNew(),last:null,tracks:[],dim:null,flip:false,miss:0,frames:0,timer:null,paHtml:'',pick:null,frozen:false,frozenAt:0,els:new Map()});
+let live=liveNew(0);
+const nowEff=()=>live.frozen?live.frozenAt:Date.now();
 function loadScript(src){
   return new Promise((res,rej)=>{
     if(window.Tesseract)return res();
@@ -538,13 +615,13 @@ const setHint=t=>{const el=$('#scHint');if(el&&el.textContent!==t)el.textContent
 /* --- live tracking loop --- */
 function liveStop(){live.on=false;live.gen++;clearTimeout(live.timer);}
 function liveStart(){
-  liveStop();
-  live={on:true,gen:live.gen,T:trackerNew(),last:null,marks:[],dim:null,flip:false,frames:0,timer:null,ovHtml:'',paHtml:'',pick:-1};
-  liveLoop(live.gen);
+  const g=live.gen+1;clearTimeout(live.timer);
+  live=liveNew(g);live.on=true;
+  liveLoop(g);
 }
 async function liveLoop(gen){
-  if(!live.on||gen!==live.gen)return;
-  const next=ms=>{if(live.on&&gen===live.gen)live.timer=setTimeout(()=>liveLoop(gen),ms);};
+  if(!live.on||gen!==live.gen||live.frozen)return;
+  const next=ms=>{if(live.on&&gen===live.gen&&!live.frozen)live.timer=setTimeout(()=>liveLoop(gen),ms);};
   const v=$('#scV');
   if(!v||!v.videoWidth||document.hidden){next(300);return;}
   try{
@@ -557,11 +634,14 @@ async function liveLoop(gen){
     const res=await ocrCanvas(w,prep(c,live.flip));
     if(!live.on||gen!==live.gen)return;
     live.dim={w:c.width,h:c.height};live.last=res;live.frames++;
-    trackerPush(live.T,res);
-    if(foundCount(res)<2)live.flip=!live.flip;   // try the other polarity when little is found
+    trackerPush(live.T,res,5,Date.now());
+    // switch polarity only after two weak frames in a row, and never while values are locked
+    const lockedN=FIELDS.filter(k=>live.T.lock[k]||live.T.manual[k]).length;
+    if(foundCount(res)>=2||lockedN>=2)live.miss=0;
+    else{live.miss++;if(live.miss>=2){live.flip=!live.flip;live.miss=0;}}
     drawLive();
   }catch(e){
-    setHint('Live reading is not available (scanner engine missing). Tap "Use photo instead" or type the values yourself.');
+    setHint('Live reading is not available (scanner engine missing). Tap "Photo instead" or type the values yourself.');
     return;
   }
   next(120);
@@ -575,26 +655,29 @@ function drawLive(){
   if(!S.scan||S.scan.stage!=='cam'||!live.on)return;
   const v=$('#scV'),wr=$('#scWrap'),ov=$('#scOv'),pa=$('#scPanel');
   if(!v||!wr||!ov||!pa||!v.videoWidth||!live.dim)return;
-  const {st,n}=liveSummary(),T=live.T;
-  live.marks=(live.last&&live.last.marks)||[];
+  const {st,n}=liveSummary(),T=live.T,now=nowEff();
+  const tr=trackerTracks(T,now);live.tracks=tr;
   const cw=wr.clientWidth,ch=wr.clientHeight,vw=v.videoWidth,vh=v.videoHeight;
   const k=Math.min(cw/vw,ch/vh),ox=(cw-vw*k)/2,oy=(ch-vh*k)/2,s=live.dim.w/vw;
   const X=x=>ox+(x/s)*k,Y=y=>oy+(y/s)*k;
-  let html='';
-  live.marks.forEach((m,i)=>{
-    let cls='cand',tag=m.u?('dB'+(m.u==='?'?'?':m.u)):'';
-    const man=FIELDS.find(f=>T.manual[f]&&T.manual[f].s===m.s&&T.manual[f].u===m.u);
-    if(man){cls='man';tag=NAME[man]+' 📌';}
-    else if(m.field){
-      const f=st[m.field];
-      if(f.status==='unstable'){cls='unst';tag=NAME[m.field]+' changing';}
-      else if(m.state==='ok'){const lk=f.status==='locked'&&f.value===m.s;cls='ok'+(lk?' lock':'');tag=NAME[m.field]+(lk?' ✓':'');}
-      else{cls='warn';tag=NAME[m.field]+' (check unit)';}
-    }
-    const L=X(m.box.x0)-4,T0=Y(m.box.y0)-4,W=X(m.box.x1)-X(m.box.x0)+8,H=Y(m.box.y1)-Y(m.box.y0)+8;
-    html+=`<div class="mk ${cls}${T0<26?' below':''}" data-i="${i}" style="left:${L.toFixed(1)}px;top:${T0.toFixed(1)}px;width:${W.toFixed(1)}px;height:${H.toFixed(1)}px"><i>${esc(tag)}</i></div>`;
-  });
-  if(html!==live.ovHtml){ov.innerHTML=html;live.ovHtml=html;}
+  const keep=new Set();
+  for(const o of tr){
+    keep.add(o.key);
+    let el=live.els.get(o.key);
+    if(!el){el=document.createElement('div');el.dataset.k=o.key;el.innerHTML='<i></i>';ov.appendChild(el);live.els.set(o.key,el);}
+    let cls='cand',tag=o.u?('dB'+(o.u==='?'?'?':o.u)):'';
+    if(o.kind==='manual'){cls='man';tag=NAME[o.field]+' 📌';}
+    else if(o.kind==='locked'){cls='ok lock';tag=NAME[o.field]+' ✓';}
+    else if(o.kind==='unstable'){cls='unst';tag=NAME[o.field]+' changing';}
+    else if(o.kind==='ok'){cls='ok';tag=NAME[o.field];}
+    else if(o.kind==='warn'){cls='warn';tag=NAME[o.field]+' (check unit)';}
+    const L=X(o.box.x0)-4,T0=Y(o.box.y0)-4,W=X(o.box.x1)-X(o.box.x0)+8,H=Y(o.box.y1)-Y(o.box.y0)+8;
+    const full='mk '+cls+(T0<26?' below':'')+(o.stale?' stale':'');
+    if(el.className!==full)el.className=full;
+    el.style.left=L.toFixed(1)+'px';el.style.top=T0.toFixed(1)+'px';el.style.width=W.toFixed(1)+'px';el.style.height=H.toFixed(1)+'px';
+    const lab=el.firstChild;if(lab.textContent!==tag)lab.textContent=tag;
+  }
+  for(const [key,el] of live.els)if(!keep.has(key)){el.remove();live.els.delete(key);}
   const chip=f=>{
     const x=st[f];let c=x.status,t='–';
     if(x.status==='locked')t=x.value+' ✓';
@@ -606,23 +689,50 @@ function drawLive(){
   };
   const ph=FIELDS.map(chip).join('');
   if(ph!==live.paHtml){pa.innerHTML=ph;live.paHtml=ph;}
-  const btn=$('#scUse');if(btn){btn.disabled=n===0;btn.textContent=`Use values (${n}/3)`;}
+  const btn=$('#scUse');if(btn){btn.disabled=n===0;const t=`Use values (${n}/3)`;if(btn.textContent!==t)btn.textContent=t;}
   const unst=FIELDS.some(f=>st[f].status==='unstable'),sug=FIELDS.some(f=>st[f].status==='suggest');
-  setHint(n===3?'All three values are locked. Tap "Use values".':
+  setHint(live.frozen?'Frozen. Tap a box to assign it, or tap "Use values".':
+    n===3?'All three values are locked and stay locked if the phone moves. Tap "Use values".':
     unst?'A value keeps changing. Stop the measurement on the instrument, or hold steady.':
     sug?'Yellow = unit not read. Tap the yellow box to assign it, or move closer.':
     'Hold steady. Green = read with the right unit, orange = changing, white dashed = other numbers (tap to assign).');
 }
-function openChooser(i){
-  const m=live.marks[i];if(!m)return;live.pick=i;
+function liveFreeze(){
+  const v=$('#scV'),b=$('#scFreeze'),wr=$('#scWrap');if(!v||!live.on)return;
+  if(!live.frozen){
+    live.frozen=true;live.frozenAt=Date.now();clearTimeout(live.timer);live.gen++;   // cancel any frame still being read
+    try{v.pause();}catch(e){}
+    if(b)b.textContent='Resume';
+    if(wr&&!$('#scFrozenTag')){const g=document.createElement('div');g.id='scFrozenTag';g.className='frozen-tag';g.textContent='❚❚ Frozen';wr.appendChild(g);}
+  }else{
+    live.frozen=false;live.frozenAt=0;
+    try{v.play();}catch(e){}
+    if(b)b.textContent='Freeze';
+    const g=$('#scFrozenTag');if(g)g.remove();
+    liveLoop(live.gen);
+  }
+  drawLive();
+}
+function openChooser(key){
+  const m=(live.tracks||[]).find(o=>o.key===key);if(!m)return;
+  live.pick={s:m.s,u:m.u,box:{...m.box}};
   $('#scChoose').innerHTML=`<div class="chooser"><b>${esc(m.s)}${m.u&&m.u!=='?'?' dB'+esc(m.u):''} → put in:</b>
     <div class="row"><button class="btn sm" data-act="mkAssign" data-f="laeq">LAeq</button><button class="btn sm" data-act="mkAssign" data-f="lamax">LAmax</button><button class="btn sm" data-act="mkAssign" data-f="lceq">LCeq</button><button class="btn sm sec" data-act="mkCancel">Cancel</button></div></div>`;
 }
 function assignMark(f){
-  const m=live.marks[live.pick];$('#scChoose').innerHTML='';if(!m)return;
+  const m=live.pick;$('#scChoose').innerHTML='';live.pick=null;if(!m)return;
   const bad=(f==='lceq'&&m.u==='A')||(f!=='lceq'&&m.u==='C');
   if(bad&&!confirm(`This number was read as dB${m.u}. Put it in ${NAME[f]} anyway?`))return;
-  live.T.manual[f]={s:m.s,u:m.u};live.ovHtml='';live.paHtml='';drawLive();
+  live.T.manual[f]={s:m.s,u:m.u,box:m.box,last:nowEff()};live.paHtml='';drawLive();
+}
+function chipTap(f){
+  const T=live.T;
+  if(T.manual[f]){delete T.manual[f];}
+  else if(T.lock[f]){
+    if(!confirm(`Re-read ${NAME[f]}? The locked value ${T.lock[f].s} will be cleared.`))return;
+    delete T.lock[f];T.hist.forEach(r=>{if(r&&r.src)delete r.src[f];});
+  }else return;
+  live.paHtml='';drawLive();
 }
 function useLive(){
   const v=$('#scV');if(!v||!v.videoWidth)return;
@@ -643,7 +753,7 @@ async function startCam(){
     camStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}},audio:false});
     v.srcObject=camStream;await v.play();
   }catch(e){
-    setHint('Camera not available here. Tap "Use photo instead", or allow camera access.');
+    setHint('Camera not available here. Tap "Photo instead", or allow camera access.');
   }
 }
 function stopCam(){if(camStream){camStream.getTracks().forEach(t=>t.stop());camStream=null;}}
@@ -693,7 +803,7 @@ function drawScan(){
     <div class="lpanel" id="scPanel"></div>
     <div class="sfoot"><div class="hint" id="scHint">Starting camera…</div>
     <button class="btn block" style="margin-top:0" id="scUse" data-act="liveUse" disabled>Use values (0/3)</button>
-    <div class="row" style="margin-top:8px"><button class="btn sec sm" data-act="scanPhoto">Use photo instead</button><button class="btn sec sm" data-act="scanShot">Read this frame</button></div></div></div>`;
+    <div class="row" style="margin-top:8px"><button class="btn sec sm" data-act="scanPhoto">Photo instead</button><button class="btn sec sm" id="scFreeze" data-act="liveFreeze">Freeze</button><button class="btn sec sm" data-act="scanShot">Read frame</button></div></div></div>`;
   }else if(sc.stage==='busy'){
     el.innerHTML=`<div class="scan light"><div class="sbar"><b>Reading display…</b><span></span></div>
     <div class="sbody"><img class="shot" src="${urlOf(sc.blob)}" alt=""><p class="muted" id="scMsg">Starting…</p></div></div>`;
@@ -806,19 +916,20 @@ document.addEventListener('click',async e=>{
     case 'scanAgain':enterCam();break;
     case 'scanUse':applyScan();break;
     case 'liveUse':useLive();break;
+    case 'liveFreeze':liveFreeze();break;
     case 'mkAssign':assignMark(el.dataset.f);break;
-    case 'mkCancel':$('#scChoose').innerHTML='';break;
-    case 'chipClear':{const f=el.dataset.f;if(live.T.manual[f]){delete live.T.manual[f];live.ovHtml='';live.paHtml='';drawLive();}break;}
+    case 'mkCancel':$('#scChoose').innerHTML='';live.pick=null;break;
+    case 'chipClear':chipTap(el.dataset.f);break;
     case 'pickNum':{const f=$('#'+(S.scanFocus||'sc_laeq'));if(f)f.value=el.dataset.v;break;}
     case 'prepScan':prepScan(el);break;
     case 'tools':
       if(confirm('OK = Save backup (JSON with all photos).\nCancel = Restore from a backup file.'))backup();else $('#imp').click();break;
   }
 });
-/* tapping a tracker box reacts on press, because the overlay is redrawn every frame */
+/* tapping a tracker box reacts on press */
 document.addEventListener('pointerdown',e=>{
   const m=e.target.closest&&e.target.closest('.mk');
-  if(m&&S.scan&&S.scan.stage==='cam')openChooser(+m.dataset.i);
+  if(m&&S.scan&&S.scan.stage==='cam')openChooser(m.dataset.k);
 });
 document.addEventListener('focusin',e=>{if(e.target.id&&e.target.id.startsWith('sc_')&&e.target.type!=='checkbox')S.scanFocus=e.target.id;});
 document.addEventListener('input',e=>{
