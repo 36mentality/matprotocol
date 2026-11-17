@@ -1,4 +1,4 @@
-const C='matprotokoll-v7', R='matprotokoll-ocr-v1';
+const C='matprotokoll-v8', R='matprotokoll-ocr-v1';
 const FILES=['./','./index.html','./manifest.json','./icon-192.png','./icon-512.png'];
 const CDN=['cdn.jsdelivr.net','tessdata.projectnaptha.com','unpkg.com'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>c.addAll(FILES)));self.skipWaiting()});
@@ -7,7 +7,6 @@ self.addEventListener('fetch',e=>{
   if(e.request.method!=='GET')return;
   const u=new URL(e.request.url);
   if(CDN.includes(u.hostname)){
-    // OCR engine files: cache on first download so the scanner works offline later
     e.respondWith(caches.open(R).then(async c=>{
       const hit=await c.match(e.request);if(hit)return hit;
       const res=await fetch(e.request);
